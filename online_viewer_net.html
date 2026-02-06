@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Lista de Compras</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2ecc71">
+
+  <!-- Favicon SVG base64 -->
+  <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjgwIiBmaWxsPSIjMmVjYzcxIi8+PHRleHQgeD0iMjU2IiB5PSIzMDAiIGZvbnQtc2l6ZT0iMjgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSJ3aGl0ZSI+🛒PC90ZXh0Pjwvc3ZnPg==">
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f4f4f4;
+      margin: 0;
+      padding: 16px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .box {
+      max-width: 500px;
+      margin: auto;
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.1);
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      background: #2ecc71;
+      color: white;
+      border: none;
+      border-radius: 8px;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 16px;
+    }
+    li {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    li span {
+      cursor: pointer;
+    }
+    .done {
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="box">
+    <h1>🛒 Lista de Compras</h1>
+
+    <input id="item" placeholder="Adicionar item..." />
+    <button onclick="adicionar()">Adicionar</button>
+
+    <ul id="lista"></ul>
+  </div>
+
+<script>
+/* =====================
+   MANIFEST EMBUTIDO
+===================== */
+const manifest = {
+  name: "Lista de Compras",
+  short_name: "Compras",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#ffffff",
+  theme_color: "#2ecc71",
+  icons: [{
+    src: document.querySelector('link[rel="icon"]').href,
+    sizes: "512x512",
+    type: "image/svg+xml"
+  }]
+};
+
+const blob = new Blob(
+  [JSON.stringify(manifest)],
+  { type: "application/json" }
+);
+
+const manifestURL = URL.createObjectURL(blob);
+const link = document.createElement("link");
+link.rel = "manifest";
+link.href = manifestURL;
+document.head.appendChild(link);
+
+/* =====================
+   INDEXEDDB
+===================== */
+let db;
+const request = indexedDB.open("listaComprasDB", 1);
+
+request.onupgradeneeded = e => {
+  db = e.target.result;
+  db.createObjectStore("itens", { keyPath: "id", autoIncrement: true });
+};
+
+request.onsuccess = e => {
+  db = e.target.result;
+  carregar();
+};
+
+function adicionar() {
+  const input = document.getElementById("item");
+  if (!input.value.trim()) return;
+
+  const tx = db.transaction("itens", "readwrite");
+  tx.objectStore("itens").add({
+    texto: input.value,
+    feito: false
+  });
+
+  tx.oncomplete = () => {
+    input.value = "";
+    carregar();
+  };
+}
+
+function carregar() {
+  const ul = document.getElementById("lista");
+  ul.innerHTML = "";
+
+  const tx = db.transaction("itens", "readonly");
+  const store = tx.objectStore("itens");
+  const req = store.openCursor();
+
+  req.onsuccess = e => {
+    const cursor = e.target.result;
+    if (!cursor) return;
+
+    const li = document.createElement("li");
+
+    const span = document.createElement("span");
+    span.textContent = cursor.value.texto;
+    if (cursor.value.feito) span.classList.add("done");
+
+    span.onclick = () => {
+      const tx2 = db.transaction("itens", "readwrite");
+      cursor.value.feito = !cursor.value.feito;
+      tx2.objectStore("itens").put(cursor.value);
+      tx2.oncomplete = carregar;
+    };
+
+    const del = document.createElement("button");
+    del.textContent = "✕";
+    del.style.background = "#e74c3c";
+    del.style.width = "auto";
+    del.onclick = () => {
+      const tx2 = db.transaction("itens", "readwrite");
+      tx2.objectStore("itens").delete(cursor.value.id);
+      tx2.oncomplete = carregar;
+    };
+
+    li.appendChild(span);
+    li.appendChild(del);
+    ul.appendChild(li);
+
+    cursor.continue();
+  };
+}
+</script>
+
+</body>
+</html>
